@@ -117,7 +117,11 @@ fn print_java_motd(java_resp: JavaResponse) {
     lines.push(format!(
         "{} | {} {}",
         output_field_format("Java版").bright_green(),
-        java_resp.game_version,
+        if java_resp.game_version.width() < 30 {
+            java_resp.game_version.bright_yellow()
+        } else {
+            format!("{}...", &java_resp.game_version[..30]).bright_yellow()
+        },
         format!("({})", java_resp.protocol_version).cyan()
     ));
     match print_java_motd_extra_process(java_resp.description.clone()) {
