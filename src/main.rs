@@ -9,25 +9,21 @@ use gamedig::{
 };
 use regex::Regex;
 use serde::Deserialize;
-use serde_json::from_str;
+use serde_json::{from_str, to_string, Map, Value};
 use unicode_width::UnicodeWidthStr;
 use viuer::{print, terminal_size, Config};
 
-use std::collections::HashMap;
 use std::net::ToSocketAddrs;
+use std::{collections::HashMap, error::Error};
 use std::{net::IpAddr, process::exit, thread, time::Duration};
 
 #[derive(Debug, Deserialize)]
 struct JavaDescription {
-    extra: Option<Vec<JavaDescriptionExtra>>,
-    text: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct JavaDescriptionExtra {
+    extra: Option<Vec<JavaDescription>>,
     text: String,
     color: Option<String>,
     bold: Option<bool>,
+    italic: Option<bool>,
 }
 
 fn main() {
@@ -124,25 +120,40 @@ fn print_java_motd(java_resp: JavaResponse) {
         java_resp.game_version,
         format!("({})", java_resp.protocol_version).cyan()
     ));
-    match from_str::<JavaDescription>(&java_resp.description) {
+    match print_java_motd_extra_process(java_resp.description.clone()) {
         Ok(description) => {
             let mut colored_description: ColoredString = String::new().white();
             if let Some(extras) = description.extra {
                 let colors = mc_formatting_colors_by_name();
-                for extra in extras {
-                    let mut text: ColoredString = extra.text.white();
-                    if let Some(color) = extra.color {
-                        if let Some((r, g, b)) = colors.get(color.as_str()) {
-                            text = text.truecolor(*r, *g, *b);
+                fn extra_child_process(
+                    colored_description: &mut ColoredString,
+                    extras: Vec<JavaDescription>,
+                    colors: &HashMap<&str, (u8, u8, u8)>,
+                ) {
+                    for extra in extras {
+                        let mut text: ColoredString = extra.text.white();
+                        if let Some(color) = extra.color {
+                            if let Some((r, g, b)) = colors.get(color.as_str()) {
+                                text = text.truecolor(*r, *g, *b);
+                            }
+                        };
+                        if let Some(bold) = extra.bold {
+                            if bold {
+                                text = text.bold();
+                            }
+                        };
+                        if let Some(italic) = extra.italic {
+                            if italic {
+                                text = text.italic();
+                            }
+                        };
+                        if let Some(extra) = extra.extra {
+                            extra_child_process(&mut text, extra, colors);
                         }
-                    };
-                    if let Some(bold) = extra.bold {
-                        if bold {
-                            text = text.bold();
-                        }
-                    };
-                    colored_description = format!("{}{}", colored_description, text).into();
+                        *colored_description = format!("{}{}", colored_description, text).into();
+                    }
                 }
+                extra_child_process(&mut colored_description, extras, &colors);
             };
             colored_description = format!(
                 "{}{}",
@@ -183,6 +194,7 @@ fn print_java_motd(java_resp: JavaResponse) {
         java_resp.players_online,
         java_resp.players_maximum
     ));
+
     if let Some(map) = java_resp.map().clone() {
         lines.push(format!(
             "{} | {}",
@@ -257,6 +269,34 @@ fn print_java_motd(java_resp: JavaResponse) {
                     "|".bold(),
                     "图片解码失败".bright_red().bold()
                 );
+            }
+        }
+    }
+}
+
+fn print_java_motd_extra_process(json_origin: String) -> Result<JavaDescription, Box<dyn Error>> {
+    let mut json: Value = from_str(&json_origin)?;
+    if let Some(extra) = json.get_mut("extra") {
+        if let Some(extras) = extra.as_array_mut() {
+            print_java_motd_extra_process_child(extras);
+        }
+        return Ok(from_str::<JavaDescription>(&to_string(&json)?)?);
+    }
+
+    Ok(from_str::<JavaDescription>(&json_origin)?)
+}
+
+fn print_java_motd_extra_process_child(extras: &mut Vec<Value>) {
+    for extras_ch in extras.iter_mut() {
+        if extras_ch.is_string() {
+            let mut new_map = Map::new();
+            new_map.insert("text".to_string(), Value::String(extras_ch.as_str().unwrap().to_string()));
+            *extras_ch = Value::Object(new_map);
+        } else if let Some(extra_map) = extras_ch.as_object_mut() {
+            if let Some(nested_extra) = extra_map.get_mut("extra") {
+                if let Some(nested_extras) = nested_extra.as_array_mut() {
+                    print_java_motd_extra_process_child(nested_extras);
+                }
             }
         }
     }
