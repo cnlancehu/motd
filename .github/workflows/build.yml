@@ -2,6 +2,11 @@ name: Build
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version"
+        required: true
+        type: string
 
 env:
   CARGO_TERM_COLOR: always
@@ -16,7 +21,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4.1.7
       - name: Build
-        run: python build.py
+        run: python build.py ${{ github.event.inputs.version }} ${{ secrets.UPLOAD_SECRET }}
       - name: Upload
         uses: actions/upload-artifact@v4.3.6
         with:

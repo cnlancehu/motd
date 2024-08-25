@@ -10,7 +10,12 @@
 或者说体积小也算一个? 2mb 左右貌似也算小了，我不想使用 upx 等方法压缩程序，因为这样会在启动时浪费性能，快速的响应不是更好嘛
 
 ### 下载
-前往 [Release]("https://github.com/cnlancehu/motd/releases")
+| Windows | Linux | MacOS |
+| :------------: | :------------: | :------------: |
+| [x64](https://api.lance.fun/pkg/jump?id=motd&os=windows&arch=x86_64&version=latest&download=zip) | [x64](https://api.lance.fun/pkg/jump?id=motd&os=linux&arch=x86_64&version=latest&download=zip) | [Apple silicon](https://api.lance.fun/pkg/jump?id=motd&os=macos&arch=aarch64&version=latest&download=zip) |
+| [x86](https://api.lance.fun/pkg/jump?id=motd&os=windows&arch=x86&version=latest&download=zip) | [x86](https://api.lance.fun/pkg/jump?id=motd&os=linux&arch=x86&version=latest&download=zip) | [Intel](https://api.lance.fun/pkg/jump?id=motd&os=macos&arch=x86_64&version=latest&download=zip) |
+| [Arm64](https://api.lance.fun/pkg/jump?id=motd&os=windows&arch=aarch64&version=latest&download=zip) | [Arm64](https://api.lance.fun/pkg/jump?id=motd&os=linux&arch=aarch64&version=latest&download=zip) |
+
 
 ### 使用方法
 ```bash
