@@ -7,11 +7,11 @@ use gamedig::{
     minecraft::{self, BedrockResponse, JavaResponse},
     protocols::types::CommonResponse,
 };
+use image::{imageops::FilterType, load_from_memory, GenericImageView as _, Rgba};
 use regex::Regex;
 use serde::Deserialize;
 use serde_json::{from_str, to_string, Map, Value};
 use unicode_width::UnicodeWidthStr;
-use viuer::{print, terminal_size, Config};
 
 use std::net::ToSocketAddrs;
 use std::{collections::HashMap, error::Error};
@@ -234,6 +234,7 @@ fn print_java_motd(java_resp: JavaResponse) {
             }
         }
     };
+    let lines_len = lines.len();
     for line in lines {
         println!("{}", line);
     }
@@ -241,21 +242,43 @@ fn print_java_motd(java_resp: JavaResponse) {
         let favicon = favicon.replace("data:image/png;base64,", "");
         match BASE64_STANDARD.decode(favicon) {
             Ok(image) => {
-                let image = image::load_from_memory(&image).unwrap();
-                let term_size = terminal_size();
-                let viuer_config = Config {
-                    absolute_offset: true,
-                    x: term_size.0 - (term_size.1 as f64 / 3.0 * 4.0).floor() as u16,
-                    y: 0,
-                    width: Some((term_size.1 as f64 / 3.0 * 4.0).floor() as u32),
-                    height: Some((term_size.1 as f64 / 3.0 * 2.0).floor() as u32),
-                    transparent: true,
-                    restore_cursor: true,
-                    ..Default::default()
+                let size = match calc_image_size((13, lines_len as u16 + 1)) {
+                    Ok(size) => size,
+                    Err(_) => {
+                        println!(
+                            "{} {} {}",
+                            output_field_format("图标").bright_cyan(),
+                            "|".bright_cyan().bold(),
+                            "请调大控制台窗口的大小".bright_red().bold()
+                        );
+                        return;
+                    }
                 };
-
-                match print(&image, &viuer_config) {
-                    Ok(_) => {}
+                match img2lines(&image, size as u32) {
+                    Ok(lines) => {
+                        println!(
+                            "{} {}",
+                            output_field_format("").bright_cyan(),
+                            "|",
+                        );
+                        for (index, line) in lines.into_iter().enumerate() {
+                            if index == 0 {
+                                println!(
+                                    "{} {} {}",
+                                    output_field_format("图标").bright_cyan(),
+                                    "|".bright_cyan().bold(),
+                                    line
+                                );
+                            } else {
+                                println!(
+                                    "{} {} {}",
+                                    output_field_format("").bright_cyan(),
+                                    "|".bright_cyan().bold(),
+                                    line
+                                )
+                            };
+                        }
+                    }
                     Err(_) => {
                         println!(
                             "{} {} {}",
@@ -294,7 +317,10 @@ fn print_java_motd_extra_process_child(extras: &mut Vec<Value>) {
     for extras_ch in extras.iter_mut() {
         if extras_ch.is_string() {
             let mut new_map = Map::new();
-            new_map.insert("text".to_string(), Value::String(extras_ch.as_str().unwrap().to_string()));
+            new_map.insert(
+                "text".to_string(),
+                Value::String(extras_ch.as_str().unwrap().to_string()),
+            );
             *extras_ch = Value::Object(new_map);
         } else if let Some(extra_map) = extras_ch.as_object_mut() {
             if let Some(nested_extra) = extra_map.get_mut("extra") {
@@ -566,4 +592,68 @@ fn mc_formatting_styles() -> HashMap<char, MCFontFormattingStyle> {
 
 fn ss() -> char {
     '§'
+}
+
+pub fn img2lines(buffer: &[u8], size: u32) -> Result<Vec<String>, Box<dyn Error>> {
+    let image = load_from_memory(buffer)?.resize(size, size, FilterType::CatmullRom);
+    let pixels = image.pixels().map(|p| p).collect::<Vec<_>>();
+    let mut pixels_2d: Vec<Vec<Rgba<u8>>> = Vec::new();
+    for pixel in pixels {
+        let (x, y) = (pixel.0, pixel.1);
+        if x == 0 {
+            pixels_2d.push(Vec::new());
+        };
+        pixels_2d.last_mut().unwrap().push(image.get_pixel(x, y));
+    }
+    let pixel_2d_pairs: Vec<(Vec<Rgba<u8>>, Option<Vec<Rgba<u8>>>)> = pixels_2d
+        .chunks(2)
+        .map(|chunk| {
+            let row1 = chunk[0].clone();
+            let row2 = if chunk.len() > 1 {
+                Some(chunk[1].clone())
+            } else {
+                None
+            };
+            (row1, row2)
+        })
+        .collect();
+
+    let mut lines: Vec<String> = Vec::new();
+    for (row1, row2) in pixel_2d_pairs {
+        let mut line = String::new();
+        if let Some(row2) = row2 {
+            for i in 0..row1.len() - 1 {
+                let block: ColoredString = "▀"
+                    .truecolor(row1[i][0], row1[i][1], row1[i][2])
+                    .on_truecolor(row2[i][0], row2[i][1], row2[i][2]);
+                line = format!("{}{}", line, block);
+            }
+        }
+        lines.push(line);
+    }
+    Ok(lines)
+}
+
+fn calc_image_size(base: (u16, u16)) -> Result<usize, Box<dyn Error>> {
+    let term_size = match crossterm::terminal::size() {
+        Ok(size) => size,
+        Err(_) => (80, 24),
+    };
+    if term_size.0 <= base.0 || term_size.1 <= base.1 {
+        return Err("控制台过小，请调大控制台窗口的大小".into());
+    }
+    let x_max = term_size.0 - base.0;
+    let y_max = term_size.1 - base.1;
+    if x_max < y_max {
+        if x_max < 13 {
+            return Err("控制台过小，请调大控制台窗口的大小".into());
+        }
+        Ok(x_max as usize)
+    } else {
+        Ok(if (y_max * 2 - 2) > 64{
+            64
+        } else {
+            y_max * 2 - 2
+        } as usize)
+    }
 }

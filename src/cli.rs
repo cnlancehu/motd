@@ -86,7 +86,7 @@ fn echo_help() {
     println!(
         "{}\n",
         "跨平台的 Minecraft 服务器 Motd 测试工具"
-            .bright_blue()
+            .bright_cyan()
             .bold()
     );
     println!(
