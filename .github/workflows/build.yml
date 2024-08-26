@@ -29,3 +29,27 @@ jobs:
         with:
           name: ${{ matrix.os }}-artifact
           path: dist/*
+  Release: 
+    needs: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/*
+          name: ${{ github.event.inputs.version }}
+          tag_name: ${{ github.event.inputs.version }}
+          draft: true
+          prerelease: false
+          body: |
+            ### 下载
+            | Windows | Linux | MacOS |
+            | :------------: | :------------: | :------------: |
+            | [x64](https://api.lance.fun/pkg/jump?id=motd&os=windows&arch=x86_64&version=${{ github.event.inputs.version }}&download=zip) | [x64](https://api.lance.fun/pkg/jump?id=motd&os=linux&arch=x86_64&version=${{ github.event.inputs.version }}&download=zip) | [Apple silicon](https://api.lance.fun/pkg/jump?id=motd&os=macos&arch=aarch64&version=${{ github.event.inputs.version }}&download=zip) |
+            | [x86](https://api.lance.fun/pkg/jump?id=motd&os=windows&arch=x86&version=${{ github.event.inputs.version }}&download=zip) | [x86](https://api.lance.fun/pkg/jump?id=motd&os=linux&arch=x86&version=${{ github.event.inputs.version }}&download=zip) | [Intel](https://api.lance.fun/pkg/jump?id=motd&os=macos&arch=x86_64&version=${{ github.event.inputs.version }}&download=zip) |
+            | [Arm64](https://api.lance.fun/pkg/jump?id=motd&os=windows&arch=aarch64&version=${{ github.event.inputs.version }}&download=zip) | [Arm64](https://api.lance.fun/pkg/jump?id=motd&os=linux&arch=aarch64&version=${{ github.event.inputs.version }}&download=zip) |
+          token: ${{ secrets.GHTOKEN }}
