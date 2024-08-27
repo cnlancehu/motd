@@ -47,6 +47,9 @@ jobs:
           draft: true
           prerelease: false
           body: |
+            ### 更新
+            - 
+
             ### 下载
             | Windows | Linux | MacOS |
             | :------------: | :------------: | :------------: |

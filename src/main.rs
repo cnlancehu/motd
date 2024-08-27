@@ -256,11 +256,7 @@ fn print_java_motd(java_resp: JavaResponse) {
                 };
                 match img2lines(&image, size as u32) {
                     Ok(lines) => {
-                        println!(
-                            "{} {}",
-                            output_field_format("").bright_cyan(),
-                            "|",
-                        );
+                        println!("{} {}", output_field_format("").bright_cyan(), "|",);
                         for (index, line) in lines.into_iter().enumerate() {
                             if index == 0 {
                                 println!(
@@ -650,7 +646,7 @@ fn calc_image_size(base: (u16, u16)) -> Result<usize, Box<dyn Error>> {
         }
         Ok(x_max as usize)
     } else {
-        Ok(if (y_max * 2 - 2) > 64{
+        Ok(if (y_max * 2 - 2) > 64 {
             64
         } else {
             y_max * 2 - 2
