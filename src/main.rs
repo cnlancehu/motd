@@ -1,21 +1,26 @@
 mod cli;
-use crate::cli::parse;
+mod color;
+mod error;
+mod net_resolver;
 
+use crate::cli::parse;
+use crate::net_resolver::resolve_ip_or_domain;
+
+use anyhow::Result;
 use base64::prelude::*;
+use color::{mc_formatting_colors_by_name, to_colored_string};
 use colored::{ColoredString, Colorize};
 use gamedig::{
-    minecraft::{self, BedrockResponse, JavaResponse},
+    minecraft::{self, BedrockResponse, JavaResponse, RequestSettings},
     protocols::types::CommonResponse,
 };
 use image::{imageops::FilterType, load_from_memory, GenericImageView as _, Rgba};
-use regex::Regex;
 use serde::Deserialize;
 use serde_json::{from_str, to_string, Map, Value};
 use unicode_width::UnicodeWidthStr;
 
-use std::net::ToSocketAddrs;
 use std::{collections::HashMap, error::Error};
-use std::{net::IpAddr, process::exit, thread, time::Duration};
+use std::{thread, time::Duration};
 
 #[derive(Debug, Deserialize)]
 struct JavaDescription {
@@ -32,21 +37,23 @@ fn main() {
 
     let addr = parse();
 
-    let ip: IpAddr = if Regex::new("^(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])$").unwrap().is_match(&addr.0) {
-        addr.0.parse().unwrap_or_else(|_| {
-            println!("{}", "Motd 获取失败\n无法解析IP地址".bright_red().bold());
-            exit(1);
-        })
-    } else {
-        match format!("{}:1", addr.0).to_socket_addrs() {
-            Ok(mut addrs) => addrs.next().unwrap().ip(),
-            Err(e) => {
-                println!("{}\n{}", "Motd 获取失败".bright_red().bold(), e.to_string().bright_red());
-                exit(1);
-            }
+    let ip = match resolve_ip_or_domain(&addr.0, &mut None) {
+        Ok(ip) => ip,
+        Err(_) => {
+            println!("{}", "Motd 获取失败\n无法解析域名".bright_red().bold());
+            return;
         }
     };
-    let java_req = thread::spawn(move || minecraft::query_java(&ip, addr.1, None));
+    let java_req = thread::spawn(move || {
+        minecraft::query_java(
+            &ip,
+            addr.1,
+            Some(RequestSettings {
+                hostname: addr.0,
+                protocol_version: 763, // Java Edition 1.20
+            }),
+        )
+    });
     let bedrock_req = thread::spawn(move || minecraft::query_bedrock(&ip, addr.1));
     let mut waiting_count: usize = 0;
 
@@ -78,7 +85,7 @@ fn main() {
                         print_java_motd(java);
                     }
                     Err(_) => {
-                        println!("{}", "Motd 获取失败\n连接超时".bright_red().bold());
+                        println!("{}", "Motd 获取失败".bright_red().bold());
                     }
                 }
             }
@@ -104,7 +111,7 @@ fn main() {
                         print_bedrock_motd(bedrock);
                     }
                     Err(_) => {
-                        println!("{}", "Motd 获取失败\n连接超时".bright_red().bold());
+                        println!("{}", "Motd 获取失败".bright_red().bold());
                     }
                 }
             }
@@ -115,8 +122,9 @@ fn main() {
 fn print_java_motd(java_resp: JavaResponse) {
     let mut lines: Vec<String> = Vec::new();
     lines.push(format!(
-        "{} | {} {}",
+        "{} {} {} {}",
         output_field_format("Java版").bright_green(),
+        "|".bright_cyan().bold(),
         if java_resp.game_version.width() < 30 {
             java_resp.game_version.bright_yellow()
         } else {
@@ -193,23 +201,26 @@ fn print_java_motd(java_resp: JavaResponse) {
         }
     };
     lines.push(format!(
-        "{} | {} / {}",
+        "{} {} {} / {}",
         output_field_format("在线玩家").bright_cyan(),
+        "|".bright_cyan().bold(),
         java_resp.players_online,
         java_resp.players_maximum
     ));
 
     if let Some(map) = java_resp.map().clone() {
         lines.push(format!(
-            "{} | {}",
+            "{} {} {}",
             output_field_format("地图").bright_cyan(),
+            "|".bright_cyan().bold(),
             to_colored_string(&map)
         ));
     };
     if let Some(gamemode) = java_resp.game_mode() {
         lines.push(format!(
-            "{} | {}",
+            "{} {} {}",
             output_field_format("游戏模式").bright_cyan(),
+            "|".bright_cyan().bold(),
             gamemode
         ));
     };
@@ -220,14 +231,14 @@ fn print_java_motd(java_resp: JavaResponse) {
                     lines.push(format!(
                         "{} {} {}",
                         output_field_format("玩家列表").bright_cyan(),
-                        "|".bright_green().bold(),
+                        "|".bright_cyan().bold(),
                         to_colored_string(&player.name)
                     ));
                 } else {
                     lines.push(format!(
                         "{} {} {}",
                         output_field_format("").bright_cyan(),
-                        "|".bright_green().bold(),
+                        "|".bright_cyan().bold(),
                         to_colored_string(&player.name)
                     ));
                 }
@@ -256,7 +267,11 @@ fn print_java_motd(java_resp: JavaResponse) {
                 };
                 match img2lines(&image, size as u32) {
                     Ok(lines) => {
-                        println!("{} {}", output_field_format("").bright_cyan(), "|",);
+                        println!(
+                            "{} {}",
+                            output_field_format("").bright_cyan(),
+                            "|".bright_cyan().bold(),
+                        );
                         for (index, line) in lines.into_iter().enumerate() {
                             if index == 0 {
                                 println!(
@@ -279,7 +294,7 @@ fn print_java_motd(java_resp: JavaResponse) {
                         println!(
                             "{} {} {}",
                             output_field_format("图标").bright_cyan(),
-                            "|".bold(),
+                            "|".bright_cyan().bold(),
                             "图片输出失败".bright_red().bold()
                         );
                     }
@@ -289,7 +304,7 @@ fn print_java_motd(java_resp: JavaResponse) {
                 println!(
                     "{} {} {}",
                     output_field_format("图标").bright_cyan(),
-                    "|".bold(),
+                    "|".bright_cyan().bold(),
                     "图片解码失败".bright_red().bold()
                 );
             }
@@ -330,33 +345,38 @@ fn print_java_motd_extra_process_child(extras: &mut Vec<Value>) {
 
 fn print_bedrock_motd(bedrock_resp: BedrockResponse) {
     println!(
-        "{} | {} {}",
+        "{} {} {} {}",
         output_field_format("基岩版").bright_green(),
+        "|".bright_cyan().bold(),
         bedrock_resp.version_name.bright_yellow(),
         format!("({})", bedrock_resp.protocol_version).cyan()
     );
     println!(
-        "{} | {}",
+        "{} {} {}",
         output_field_format("Motd").bright_cyan(),
+        "|".bright_cyan().bold(),
         to_colored_string(&bedrock_resp.name)
     );
     println!(
-        "{} | {} / {}",
+        "{} {} {} / {}",
         output_field_format("在线玩家").bright_cyan(),
+        "|".bright_cyan().bold(),
         bedrock_resp.players_online,
         bedrock_resp.players_maximum
     );
     if let Some(map) = bedrock_resp.map.clone() {
         println!(
-            "{} | {}",
+            "{} {} {}",
             output_field_format("地图").bright_cyan(),
+            "|".bright_cyan().bold(),
             to_colored_string(&map)
         );
     };
     if let Some(gamemode) = bedrock_resp.game_mode.clone() {
         println!(
-            "{} | {}",
+            "{} {} {}",
             output_field_format("游戏模式").bright_cyan(),
+            "|".bright_cyan().bold(),
             match gamemode {
                 minecraft::GameMode::Survival => "生存",
                 minecraft::GameMode::Creative => "创造",
@@ -373,8 +393,9 @@ fn print_bedrock_motd(bedrock_resp: BedrockResponse) {
     }) {
         if players.len() > 0 {
             println!(
-                "{} | {}",
+                "{} {} {}",
                 output_field_format("玩家列表").bright_cyan(),
+                "|".bright_cyan().bold(),
                 players[0]
             );
             if players.len() > 1 {
@@ -382,7 +403,7 @@ fn print_bedrock_motd(bedrock_resp: BedrockResponse) {
                     println!(
                         "{} {} {}",
                         output_field_format("").bright_cyan(),
-                        "|".bright_green().bold(),
+                        "|".bright_cyan().bold(),
                         to_colored_string(player)
                     );
                 }
@@ -401,193 +422,6 @@ fn output_field_format(field: &str) -> String {
         }),
         field
     )
-}
-
-fn to_colored_string(text: &str) -> ColoredString {
-    let colors = mc_formatting_colors_by_ss();
-    let styles = mc_formatting_styles();
-    let mut colored_string: ColoredString = "".to_string().white();
-    let mut chars = text.chars().peekable();
-
-    let mut current_color: Option<(u8, u8, u8)> = None;
-    let mut current_styles: Vec<MCFontFormattingStyle> = Vec::new();
-    let mut buffer = String::new();
-
-    while let Some(c) = chars.next() {
-        if c == ss() {
-            if let Some(&next_char) = chars.peek() {
-                if colors.contains_key(&next_char) || styles.contains_key(&next_char) {
-                    if !buffer.is_empty() {
-                        let color = current_color.unwrap_or((255, 255, 255));
-                        let mut colored_text = buffer.truecolor(color.0, color.1, color.2);
-
-                        for style in &current_styles {
-                            match style {
-                                MCFontFormattingStyle::Bold => colored_text = colored_text.bold(),
-                                MCFontFormattingStyle::Italic => {
-                                    colored_text = colored_text.italic()
-                                }
-                                MCFontFormattingStyle::Underline => {
-                                    colored_text = colored_text.underline()
-                                }
-                                MCFontFormattingStyle::Strikethrough => {
-                                    colored_text = colored_text.strikethrough()
-                                }
-                                MCFontFormattingStyle::Obfuscated => {
-                                    colored_text = colored_text.dimmed()
-                                }
-                                MCFontFormattingStyle::Clear => {
-                                    colored_text = colored_text.normal()
-                                }
-                            }
-                        }
-
-                        colored_string = format!("{}{}", colored_string, colored_text).into();
-                        buffer.clear();
-                    }
-
-                    if let Some(&color) = colors.get(&next_char) {
-                        current_color = Some(color);
-                    } else if let Some(&style) = styles.get(&next_char) {
-                        if style == MCFontFormattingStyle::Clear {
-                            current_styles.clear();
-                            current_color = None;
-                        } else {
-                            current_styles.push(style);
-                        }
-                    }
-
-                    chars.next();
-                } else {
-                    buffer.push(c);
-                    buffer.push(next_char);
-                    chars.next();
-                }
-            } else {
-                buffer.push(c);
-            }
-        } else {
-            buffer.push(c);
-        }
-    }
-
-    if !buffer.is_empty() {
-        let color = current_color.unwrap_or((255, 255, 255));
-        let mut colored_text = buffer.truecolor(color.0, color.1, color.2);
-
-        // 应用所有的样式
-        for style in &current_styles {
-            match style {
-                MCFontFormattingStyle::Bold => colored_text = colored_text.bold(),
-                MCFontFormattingStyle::Italic => colored_text = colored_text.italic(),
-                MCFontFormattingStyle::Underline => colored_text = colored_text.underline(),
-                MCFontFormattingStyle::Strikethrough => colored_text = colored_text.strikethrough(),
-                MCFontFormattingStyle::Obfuscated => colored_text = colored_text.dimmed(),
-                MCFontFormattingStyle::Clear => colored_text = colored_text.normal(),
-            }
-        }
-
-        colored_string = format!("{}{}", colored_string, colored_text).into();
-    }
-
-    colored_string
-}
-
-fn mc_formatting_colors_by_ss() -> HashMap<char, (u8, u8, u8)> {
-    [
-        ('0', (0, 0, 0)),
-        ('1', (0, 0, 170)),
-        ('2', (0, 170, 0)),
-        ('3', (0, 170, 170)),
-        ('4', (170, 0, 0)),
-        ('5', (170, 0, 170)),
-        ('6', (255, 170, 0)),
-        ('7', (170, 170, 170)),
-        ('8', (85, 85, 85)),
-        ('9', (85, 85, 255)),
-        ('a', (85, 255, 85)),
-        ('b', (85, 255, 255)),
-        ('c', (255, 85, 85)),
-        ('d', (255, 85, 255)),
-        ('e', (255, 255, 85)),
-        ('f', (255, 255, 255)),
-        ('g', (221, 214, 5)),
-        ('h', (227, 212, 209)),
-        ('i', (206, 202, 202)),
-        ('j', (68, 58, 59)),
-        ('m', (151, 22, 7)),
-        ('n', (180, 104, 77)),
-        ('p', (222, 177, 45)),
-        ('q', (17, 160, 54)),
-        ('s', (44, 186, 168)),
-        ('t', (33, 73, 123)),
-        ('u', (154, 92, 198)),
-    ]
-    .iter()
-    .cloned()
-    .collect()
-}
-
-fn mc_formatting_colors_by_name() -> HashMap<&'static str, (u8, u8, u8)> {
-    [
-        ("black", (0, 0, 0)),
-        ("dark_blue", (0, 0, 170)),
-        ("dark_green", (0, 170, 0)),
-        ("dark_aqua", (0, 170, 170)),
-        ("dark_red", (170, 0, 0)),
-        ("dark_purple", (170, 0, 170)),
-        ("gold", (255, 170, 0)),
-        ("gray", (170, 170, 170)),
-        ("dark_gray", (85, 85, 85)),
-        ("blue", (85, 85, 255)),
-        ("green", (85, 255, 85)),
-        ("aqua", (85, 255, 255)),
-        ("red", (255, 85, 85)),
-        ("light_purple", (255, 85, 255)),
-        ("yellow", (255, 255, 85)),
-        ("white", (255, 255, 255)),
-        ("minecoin_gold", (221, 214, 5)),
-        ("material_quartz", (227, 212, 209)),
-        ("material_iron", (206, 202, 202)),
-        ("material_netherite", (68, 58, 59)),
-        ("material_redstone", (151, 22, 7)),
-        ("material_copper", (180, 104, 77)),
-        ("material_gold", (222, 177, 45)),
-        ("material_emerald", (17, 160, 54)),
-        ("material_diamond", (44, 186, 168)),
-        ("material_lapis", (33, 73, 123)),
-        ("material_amethyst", (154, 92, 198)),
-    ]
-    .iter()
-    .cloned()
-    .collect()
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum MCFontFormattingStyle {
-    Obfuscated,
-    Bold,
-    Strikethrough,
-    Underline,
-    Italic,
-    Clear,
-}
-
-fn mc_formatting_styles() -> HashMap<char, MCFontFormattingStyle> {
-    [
-        ('k', MCFontFormattingStyle::Obfuscated),
-        ('l', MCFontFormattingStyle::Bold),
-        ('m', MCFontFormattingStyle::Strikethrough),
-        ('n', MCFontFormattingStyle::Underline),
-        ('o', MCFontFormattingStyle::Italic),
-        ('r', MCFontFormattingStyle::Clear),
-    ]
-    .into_iter()
-    .collect()
-}
-
-fn ss() -> char {
-    '§'
 }
 
 pub fn img2lines(buffer: &[u8], size: u32) -> Result<Vec<String>, Box<dyn Error>> {
