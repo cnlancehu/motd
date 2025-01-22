@@ -1,7 +1,7 @@
+use std::{env::args, ffi::OsStr, path::Path, process::exit};
+
 use colored::Colorize;
 use unicode_width::UnicodeWidthStr;
-
-use std::{env::args, ffi::OsStr, path::Path, process::exit};
 
 pub fn parse() -> (String, Option<u16>) {
     let args: Vec<String> = args().skip(1).collect();
