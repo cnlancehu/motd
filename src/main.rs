@@ -6,7 +6,7 @@ mod print;
 
 use std::thread;
 
-use colored::Colorize as _;
+use colored::{control::ShouldColorize, Colorize as _};
 use gamedig::minecraft::{self, RequestSettings};
 use print::{print_bedrock_motd, print_java_motd};
 use serde::Deserialize;
@@ -25,6 +25,8 @@ struct JavaDescription {
 fn main() {
     #[cfg(windows)]
     colored::control::set_virtual_terminal(true).unwrap();
+
+    colored::control::set_should_colorize(ShouldColorize::YesWithTrueColor);
 
     let addr = parse();
 
