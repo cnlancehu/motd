@@ -35,6 +35,7 @@ os.makedirs("dist", exist_ok=True)
 
 for target, alias in targets[os_type].items():
     if os_type == "Linux":
+        subprocess.Popen(f"sudo apt update", stdout=subprocess.PIPE, text=True, shell=True).wait()
         subprocess.Popen(f"sudo apt install gcc-aarch64-linux-gnu -y", stdout=subprocess.PIPE, text=True, shell=True).wait()
         subprocess.Popen(f"sudo apt install gcc-i686-linux-gnu -y", stdout=subprocess.PIPE, text=True, shell=True).wait()
     subprocess.Popen(f"rustup target add {target}", stdout=subprocess.PIPE, text=True, shell=True).wait()

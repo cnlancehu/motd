@@ -71,12 +71,9 @@ fn input_error(args: Vec<String>, error_arg: usize, error_msg: &str) {
         error_msg.bright_cyan().bold()
     );
     println!(
-        " {}  {}",
+        " {}  使用 {} -h 查看帮助",
         "=".bright_cyan().bold(),
-        format!(
-            "使用 {} -h 查看帮助",
-            get_current_exe_file_name().bright_yellow()
-        )
+        get_current_exe_file_name().bright_yellow()
     );
 }
 

@@ -103,12 +103,12 @@ pub fn print_java_motd(java_resp: JavaResponse) {
         java_resp.players_maximum
     ));
 
-    if let Some(map) = java_resp.map().clone() {
+    if let Some(map) = java_resp.map() {
         lines.push(format!(
             "{} {} {}",
             output_field_format("地图").bright_cyan(),
             "|".bright_cyan().bold(),
-            to_colored_string(&map)
+            to_colored_string(map)
         ));
     };
     if let Some(gamemode) = java_resp.game_mode() {
@@ -120,7 +120,7 @@ pub fn print_java_motd(java_resp: JavaResponse) {
         ));
     };
     if let Some(players) = java_resp.players {
-        if players.len() > 0 {
+        if !players.is_empty() {
             for (i, player) in players.iter().enumerate() {
                 if i == 0 {
                     lines.push(format!(
@@ -205,7 +205,7 @@ pub fn print_java_motd(java_resp: JavaResponse) {
             }
         }
     }
-    println!("");
+    println!();
 }
 
 fn print_java_motd_extra_process(json_origin: String) -> Result<JavaDescription, Box<dyn Error>> {
@@ -220,7 +220,7 @@ fn print_java_motd_extra_process(json_origin: String) -> Result<JavaDescription,
     Ok(from_str::<JavaDescription>(&json_origin)?)
 }
 
-fn print_java_motd_extra_process_child(extras: &mut Vec<Value>) {
+fn print_java_motd_extra_process_child(extras: &mut [Value]) {
     for extras_ch in extras.iter_mut() {
         if extras_ch.is_string() {
             let mut new_map = Map::new();
@@ -268,7 +268,7 @@ pub fn print_bedrock_motd(bedrock_resp: BedrockResponse) {
             to_colored_string(&map)
         );
     };
-    if let Some(gamemode) = bedrock_resp.game_mode.clone() {
+    if let Some(gamemode) = bedrock_resp.game_mode {
         println!(
             "{} {} {}",
             output_field_format("游戏模式").bright_cyan(),
@@ -287,7 +287,7 @@ pub fn print_bedrock_motd(bedrock_resp: BedrockResponse) {
             .map(|player| player.name().to_string())
             .collect::<Vec<String>>()
     }) {
-        if players.len() > 0 {
+        if !players.is_empty() {
             println!(
                 "{} {} {}",
                 output_field_format("玩家列表").bright_cyan(),
@@ -306,7 +306,7 @@ pub fn print_bedrock_motd(bedrock_resp: BedrockResponse) {
             }
         }
     };
-    println!("");
+    println!();
 }
 
 fn output_field_format(field: &str) -> String {
@@ -323,7 +323,7 @@ fn output_field_format(field: &str) -> String {
 
 pub fn img2lines(buffer: &[u8], size: u32) -> Result<Vec<String>, Box<dyn Error>> {
     let image = load_from_memory(buffer)?.resize(size, size, FilterType::CatmullRom);
-    let pixels = image.pixels().map(|p| p).collect::<Vec<_>>();
+    let pixels = image.pixels().collect::<Vec<_>>();
     let mut pixels_2d: Vec<Vec<Rgba<u8>>> = Vec::new();
     for pixel in pixels {
         let (x, y) = (pixel.0, pixel.1);
@@ -362,10 +362,7 @@ pub fn img2lines(buffer: &[u8], size: u32) -> Result<Vec<String>, Box<dyn Error>
 }
 
 fn calc_image_size(base: (u16, u16)) -> Result<usize, Box<dyn Error>> {
-    let term_size = match crossterm::terminal::size() {
-        Ok(size) => size,
-        Err(_) => (80, 24),
-    };
+    let term_size = crossterm::terminal::size().unwrap_or((80, 24));
     if term_size.0 <= base.0 || term_size.1 <= base.1 {
         return Err("控制台过小，请调大控制台窗口的大小".into());
     }
