@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use colored::{ColoredString, Colorize};
+use cnxt::{ColoredString, Colorize};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MCFontFormattingStyle {

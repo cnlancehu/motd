@@ -1,6 +1,6 @@
 use std::{env::args, ffi::OsStr, path::Path, process::exit};
 
-use colored::Colorize;
+use cnxt::Colorize;
 use unicode_width::UnicodeWidthStr;
 
 pub fn parse() -> (String, Option<u16>) {

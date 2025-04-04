@@ -2,8 +2,8 @@ use std::{collections::HashMap, error::Error};
 
 use anyhow::Result;
 use base64::prelude::*;
+use cnxt::{ColoredString, Colorize};
 use color::{mc_formatting_colors_by_name, to_colored_string};
-use colored::{ColoredString, Colorize};
 use gamedig::{
     minecraft::{self, BedrockResponse, JavaResponse},
     protocols::types::CommonResponse,

@@ -1,12 +1,12 @@
 [package]
 name = "motd"
 version = "0.1.4"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 anyhow = "1"
 base64 = "0"
-colored = { git = "https://github.com/cnlancehu/colored" }
+cnxt = "0"
 crossterm = "0"
 gamedig = "0"
 image = "0"
